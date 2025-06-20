@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel Profesor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profesor.css') }}" />
+    <style>
+        /* Estilos para el contenedor de estudiantes */
+        #studentsContainer {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        #studentsContainer h2 {
+            margin-bottom: 20px;
+            color: #343a40;
+        }
+
+        /* Asegúrate de que el modal de perfil tenga un z-index adecuado si hay conflictos */
+        #modalPerfilProfesor.modal {
+            z-index: 1055;
+        }
+
+        #modalTarea.modal {
+            z-index: 1056;
+        }
+
+        /* Nuevos estilos para el botón de notificaciones */
+        .notification-button {
+            margin-right: 15px; /* Espacio entre el botón de notificaciones y el perfil */
+            text-decoration: none;
+            color: #343a40;
+            font-size: 1.5rem; /* Ajusta el tamaño del icono */
+        }
+
+        .notification-button .badge {
+            vertical-align: top;
+            font-size: 0.7em;
+            padding: 0.35em 0.6em;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="d-flex" id="wrapper">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header mb-4">
+                <span class="sidebar-title">Profesor</span>
+                <span class="sidebar-logo-wrap">
+                    <img src="{{ url_for('static', filename='avatars/logo.png') }}" alt="Logo" class="sidebar-logo">
+                </span>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li>
+                    <a href="#" class="nav-link text-white active" id="dashboard-link">
+                        <i class="bi bi-bar-chart-line"></i><span>Tareas</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#cursosSubmenu" data-bs-toggle="collapse" class="nav-link text-white dropdown-toggle">
+                        <i class="bi bi-people"></i><span>Cursos</span>
+                    </a>
+                    <ul class="collapse list-unstyled ps-3" id="cursosSubmenu">
+                        {% for c in ['6A','6B','6C','7A','7B','7C','8A','8B','8C','9A','9B','9C','10A','10B','10C','11A','11B','11C'] %}
+                            <li><a href="#" class="nav-link text-white curso-link-sidebar" data-course-name="{{ c }}">{{ c }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+
+        <div id="content" class="main-content">
+    <div class="d-flex justify-content-end align-items-center mb-3 top-profile-dropdown">
+        <ul class="navbar-nav flex-row"> 
+            <li class="nav-item dropdown me-3"> <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownNotificaciones" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    Notificaciones 
+                    <span class="badge bg-danger ms-1" id="notificaciones-count">0</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownNotificaciones" id="notificaciones-lista">
+                    <li><a class="dropdown-item text-center text-muted" href="#">No hay notificaciones</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-primary text-center" href="#" id="marcarTodasLeidas">Marcar todas como leídas</a></li>
+                </ul>
+            </li>
+
+            <li class="nav-item dropdown">
+                <a href="#" class="nav-link d-flex align-items-center text-dark text-decoration-none dropdown-toggle" id="perfilDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle fs-4 me-2"></i>
+                    <strong>{{ current_user.nombre }}</strong>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end text-small" aria-labelledby="perfilDropdown">
+                    <li><a class="dropdown-item" href="#" id="btnEditarPerfil">Editar perfil</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+            <div class="main-container" id="tasksContainer">
+                <h1>Gestión de Tareas</h1>
+
+                <form method="get" class="filtros-form">
+                    <div class="form-group">
+                        <label for="estado">Filtrar por estado:</label>
+                        <select id="estado" name="estado" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="pendiente" {{ 'selected' if estado == 'pendiente' else '' }}>Pendiente</option>
+                            <option value="completada" {{ 'selected' if estado == 'completada' else '' }}>Completada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="curso">Filtrar por curso:</label>
+                        <select id="curso" name="curso" class="form-select">
+                            <option value="">Todos</option>
+                            {% for c in cursos %}
+                                <option value="{{ c['curso'] }}" {{ 'selected' if curso_filtro == c['curso'] else '' }}>
+                                    {{ c['curso'] }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group align-end">
+                        <button type="submit" class="btn btn-primary">Filtrar</button>
+                    </div>
+                    <div class="form-group align-end">
+                        <button type="button" class="btn btn-success" id="btnCrearTarea" data-bs-toggle="modal" data-bs-target="#modalTarea">Crear nueva tarea</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover tabla-tareas">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Descripción</th>
+                                <th>Curso destino</th>
+                                <th>Fecha vencimiento</th>
+                                <th>Prioridad</th>
+                                <th>Estado</th>
+                                <th>Archivo</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tarea in tareas %}
+                                <tr>
+                                    <td>{{ tarea['titulo'] }}</td>
+                                    <td>{{ tarea['descripcion'] }}</td>
+                                    <td>{{ tarea['curso_destino'] }}</td>
+                                    <td>{{ tarea['fecha_vencimiento'] }}</td>
+                                    <td>{{ tarea['prioridad'] }}</td>
+                                    <td>{{ tarea['estado'] }}</td>
+                                    <td>
+                                        {% if tarea['ruta_archivo'] %}
+                                            <a href="{{ url_for('descargar_archivo', filename=tarea['ruta_archivo'].split('/')[-1]) }}" download>
+                                                Descargar archivo
+                                            </a>
+                                        {% else %}
+                                            Sin archivo
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary btn-editar" data-id="{{ tarea['id'] }}" data-bs-toggle="modal" data-bs-target="#modalTarea">Editar</button>
+                                        <form action="{{ url_for('eliminar_tarea', id=tarea['id']) }}" method="post" style="display:inline-block;">
+                                            <button class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta tarea?')">Eliminar</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="8" class="text-center">No hay tareas</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="studentsContainer" class="main-container" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 id="studentsCourseTitle">Estudiantes del Curso: <span></span></h2>
+                    <button class="btn btn-secondary" id="btnBackToTasks">Volver a Tareas</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Usuario</th>
+                                <th>Correo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="noStudentsMessage" class="alert alert-info text-center d-none" role="alert">
+                    No hay estudiantes asignados a este curso o no se pudieron cargar.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalTarea" tabindex="-1" aria-labelledby="modalTareaLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="formEditar"
+                  method="POST"
+                  enctype="multipart/form-data"
+                  action="{{ url_for('crear_tarea') }}"
+                  class="modal-content">
+
+                <input type="hidden" name="id" id="tareaId" />
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTareaLabel">Crear / Editar Tarea</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="titulo">Título</label>
+                        <input type="text" id="titulo" name="titulo" class="form-control" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descripcion">Descripción</label>
+                        <textarea id="descripcion" name="descripcion" class="form-control" rows="3"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="curso_destino">Curso destino</label>
+                        <select id="curso_destino" name="curso_destino" class="form-select" required>
+                            <option value="" disabled selected>Seleccione un curso</option>
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="fecha_vencimiento">Fecha de vencimiento</label>
+                            <input type="date" id="fecha_vencimiento" name="fecha_vencimiento" class="form-control" />
+                        </div>
+
+                        <div class="col-6 mb-3">
+                            <label for="prioridad">Prioridad</label>
+                            <select id="prioridad" name="prioridad" class="form-select">
+                                <option value="baja">Baja</option>
+                                <option value="media" selected>Media</option>
+                                <option value="alta">Alta</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="estado">Estado</label>
+                        <select id="estado" name="estado" class="form-select">
+                            <option value="pendiente" selected>Pendiente</option>
+                            <option value="completada">Completada</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="archivo">Archivo (opcional)</label>
+                        <input type="file" id="archivo" name="archivo" class="form-control" />
+                        <small id="nombreArchivoActual" class="form-text text-muted"></small>
+                    </div>
+                </div>
+
+                <div class="modal-footer-combinado d-flex justify-content-end gap-2 p-3">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalPerfilProfesor" tabindex="-1" aria-labelledby="modalPerfilProfesorLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="formPerfilProfesor" method="POST" enctype="multipart/form-data" action="/actualizar_perfil_profesor" class="modal-content">
+                <input type="hidden" name="id" id="profesorId">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPerfilProfesorLabel">Editar Perfil</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nombrePerfil" class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="nombrePerfil" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="emailPerfil" class="form-label">Correo Electrónico</label>
+                        <input type="email" class="form-control" id="emailPerfil" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="nuevaContrasenaPerfil" class="form-label">Nueva Contraseña (dejar vacío si no quieres cambiar)</label>
+                        <input type="password" class="form-control" id="nuevaContrasenaPerfil" name="nueva_contrasena">
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirmarContrasenaPerfil" class="form-label">Confirmar Nueva Contraseña</label>
+                        <input type="password" class="form-control" id="confirmarContrasenaPerfil" name="confirmar_contrasena">
+                        <div class="text-danger mt-1" id="passwordMismatch" style="display: none;">Las contraseñas no coinciden.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="avatarPerfil" class="form-label">Cambiar Avatar (opcional)</label>
+                        <input type="file" class="form-control" id="avatarPerfil" name="avatar" accept="image/*">
+                        <small id="avatarActual" class="form-text text-muted"></small>
+                        <img id="previewAvatar" src="#" alt="Vista previa del avatar" style="max-width: 100px; max-height: 100px; display: none; margin-top: 10px;">
+                    </div>
+                </div>
+                <div class="modal-footer-combinado d-flex justify-content-end gap-2 p-3">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Elementos HTML para Notificaciones ---
+        const notificacionesLista = document.getElementById('notificaciones-lista');
+        const notificacionesCountSpan = document.getElementById('notificaciones-count');
+        const marcarTodasLeidasBtn = document.getElementById('marcarTodasLeidas');
+        const notificationDropdownLink = document.getElementById('navbarDropdownNotificaciones'); // El enlace que abre el dropdown de notificaciones
+
+        // --- Elementos HTML para Tareas y Perfil (manteniendo tus referencias) ---
+        const modalTareaInstance = new bootstrap.Modal(document.getElementById('modalTarea'));
+        const modalPerfilProfesorInstance = new bootstrap.Modal(document.getElementById('modalPerfilProfesor'));
+        const tasksContainer = document.getElementById('tasksContainer');
+        const studentsContainer = document.getElementById('studentsContainer');
+        const btnCrearTarea = document.getElementById('btnCrearTarea');
+        const formEditarTarea = document.getElementById('formEditar');
+        const btnEditarPerfil = document.getElementById('btnEditarPerfil'); // Ya tienes esta referencia
+        const formPerfilProfesor = document.getElementById('formPerfilProfesor');
+        const inputNuevaContrasena = document.getElementById('nuevaContrasenaPerfil');
+        const inputConfirmarContrasena = document.getElementById('confirmarContrasenaPerfil');
+        const passwordMismatch = document.getElementById('passwordMismatch');
+        const inputAvatarPerfil = document.getElementById('avatarPerfil');
+        const avatarActualText = document.getElementById('avatarActual');
+        const previewAvatar = document.getElementById('previewAvatar');
+        const studentsCourseTitle = document.getElementById('studentsCourseTitle');
+        const studentsTableBody = document.getElementById('studentsTableBody');
+        const noStudentsMessage = document.getElementById('noStudentsMessage');
+        const btnBackToTasks = document.getElementById('btnBackToTasks');
+        const dashboardLink = document.getElementById('dashboard-link');
+        const sidebar = document.getElementById('sidebar');
+
+        // --- SIMULACIÓN DE DATOS DE NOTIFICACIONES EN EL FRONTEND ---
+        // Esto es TEMPORAL para que el "marcar como leído" funcione sin base de datos.
+        // Cuando conectes a la DB real, este array no será necesario.
+        let simulatedNotifications = [
+            {
+                'id': 1,
+                'mensaje': 'Tienes una nueva tarea asignada: "Proyecto Final de Matemáticas".',
+                'fecha': (new Date(Date.now() - 5 * 60 * 1000)).toISOString(), // Hace 5 minutos
+                'leida': false
+            },
+            {
+                'id': 2,
+                'mensaje': 'El estudiante Juan Pérez ha entregado la Tarea 3.',
+                'fecha': (new Date(Date.now() - 2 * 60 * 60 * 1000)).toISOString(), // Hace 2 horas
+                'leida': false
+            },
+            {
+                'id': 3,
+                'mensaje': 'Recordatorio: La reunión de profesores es mañana a las 10 AM.',
+                'fecha': (new Date(Date.now() - 24 * 60 * 60 * 1000)).toISOString(), // Hace 1 día
+                'leida': true // Esta ya aparece como leída
+            },
+            {
+                'id': 4,
+                'mensaje': 'Se ha actualizado el calendario académico 2025-2026.',
+                'fecha': (new Date(Date.now() - (3 * 24 + 10) * 60 * 60 * 1000)).toISOString(), // Hace 3 días y 10 horas
+                'leida': false
+            }
+        ];
+
+
+        // --- Funciones de Notificaciones ---
+
+        /**
+         * Carga y muestra las notificaciones del profesor.
+         * Utiliza los datos simulados en el frontend para que el marcado funcione.
+         * Cuando uses la DB real, descomenta la lógica de fetch y comenta la de simulado.
+         */
+        async function fetchAndDisplayNotificaciones() {
+            let notificaciones;
+            try {
+                // --- OPCIÓN 1: Usar datos simulados en el frontend (para que el marcado funcione VISUALMENTE) ---
+                notificaciones = simulatedNotifications;
+                // Simula un pequeño retraso para parecer que viene del servidor
+                await new Promise(resolve => setTimeout(resolve, 100)); 
+
+
+                // --- OPCIÓN 2: Usar el fetch real a tu API de Flask (cuando NO uses la simulación del frontend) ---
+                // const response = await fetch('/api/notificaciones');
+                // if (!response.ok) {
+                //     if (response.status === 401) {
+                //         console.error('Sesión caducada o no autenticado. Redirigiendo a login.');
+                //         window.location.href = '/login';
+                //         return;
+                //     }
+                //     throw new Error(`HTTP error! status: ${response.status}`);
+                // }
+                // notificaciones = await response.json();
+                
+                notificacionesLista.innerHTML = ''; // Limpiar todas las notificaciones actuales
+                let unreadCount = 0;
+
+                // --- AGREGAR LA NOTIFICACIÓN OBLIGATORIA DEL PERFIL ---
+                const liPerfil = document.createElement('li');
+                liPerfil.classList.add('dropdown-item', 'small', 'text-center', 'py-2');
+                liPerfil.innerHTML = `
+                    <button id="btnNotificacionPerfil" class="btn btn-warning btn-sm w-100">
+                        <i class="fas fa-lock me-2"></i> Cambiar Contraseña del Perfil
+                    </button>
+                `;
+                notificacionesLista.appendChild(liPerfil);
+
+                // Asignar evento al botón de la notificación de perfil
+                const btnNotificacionPerfil = document.getElementById('btnNotificacionPerfil');
+                if (btnNotificacionPerfil) {
+                    btnNotificacionPerfil.addEventListener('click', async function(event) {
+                        event.preventDefault(); // Previene cualquier acción por defecto del botón/enlace
+                        event.stopPropagation(); // Evita que cierre el dropdown inmediatamente si se propaga el evento
+                        
+                        // Cierra el dropdown de notificaciones
+                        const bsDropdown = bootstrap.Dropdown.getInstance(notificationDropdownLink);
+                        if (bsDropdown) {
+                            bsDropdown.hide();
+                        }
+                        
+                        // Llama a la misma función que usa el botón de editar perfil
+                        await btnEditarPerfil.click(); // Simula un clic en el botón existente para abrir el modal
+                        
+                        // Opcional: Asegurarse de que el campo de contraseña esté enfocado o visible
+                        if(inputNuevaContrasena) {
+                            inputNuevaContrasena.focus();
+                        }
+                    });
+                }
+                // --- FIN NOTIFICACIÓN OBLIGATORIA DEL PERFIL ---
+
+
+                if (notificaciones.length === 0) {
+                    const li = document.createElement('li');
+                    li.innerHTML = '<a class="dropdown-item text-center text-muted" href="#">No hay otras notificaciones</a>';
+                    notificacionesLista.appendChild(li);
+                } else {
+                    notificaciones.forEach(noti => {
+                        const li = document.createElement('li');
+                        li.classList.add('dropdown-item', 'small');
+                        if (!noti.leida) {
+                            li.classList.add('fw-bold', 'bg-light');
+                            unreadCount++;
+                        }
+
+                        const fecha = new Date(noti.fecha).toLocaleString('es-CO', { 
+                            year: 'numeric', month: 'short', day: 'numeric', 
+                            hour: '2-digit', minute: '2-digit' 
+                        });
+
+                        li.innerHTML = `
+                            <div>${noti.mensaje}</div>
+                            <div class="text-muted">${fecha}</div>
+                        `;
+                        li.dataset.notificationId = noti.id; // Almacenar el ID de la notificación
+                        notificacionesLista.appendChild(li);
+
+                        // AÑADIR EVENTO DE CLIC A CADA NOTIFICACIÓN INDIVIDUAL
+                        li.addEventListener('click', async function(event) {
+                            event.stopPropagation(); 
+                            await markNotificationsAsRead([noti.id], true); // true para indicar que es un click individual
+                        });
+                    });
+                }
+
+                // Ajustar el conteo si la notificación del perfil también cuenta como "no leída"
+                // En este caso, no la contamos en el badge porque es una notificación de acción, no de información nueva.
+                notificacionesCountSpan.textContent = unreadCount;
+
+                // Re-insertar el divisor y el botón "Marcar todas como leídas"
+                // Esto asegura que el botón siempre esté al final y accesible
+                const existingDivider = document.querySelector('#notificaciones-lista > hr.dropdown-divider');
+                const existingMarcarTodasLi = document.querySelector('#notificaciones-lista > li > #marcarTodasLeidas');
+                
+                if (existingDivider) existingDivider.remove();
+                if (existingMarcarTodasLi && existingMarcarTodasLi.parentElement) existingMarcarTodasLi.parentElement.remove();
+
+                const dividerLi = document.createElement('li');
+                dividerLi.innerHTML = '<hr class="dropdown-divider">';
+                notificacionesLista.appendChild(dividerLi);
+                
+                const marcarTodasLi = document.createElement('li');
+                marcarTodasLi.appendChild(marcarTodasLeidasBtn); 
+                notificacionesLista.appendChild(marcarTodasLi);
+
+            } catch (error) {
+                console.error('Error al cargar notificaciones:', error);
+                notificacionesLista.innerHTML = '<li><a class="dropdown-item text-center text-danger" href="#">Error al cargar notificaciones</a></li>';
+                notificacionesCountSpan.textContent = 'X';
+            }
+        }
+
+        /**
+         * Marca notificaciones como leídas y actualiza el estado.
+         * @param {Array<number>} ids - Un array de IDs de notificaciones a marcar.
+         * @param {boolean} [isIndividualClick=false] - Indica si el click proviene de una notificación individual.
+         */
+        async function markNotificationsAsRead(ids, isIndividualClick = false) {
+            try {
+                // --- OPCIÓN 1: Actualizar datos simulados en el frontend ---
+                ids.forEach(idToMark => {
+                    const index = simulatedNotifications.findIndex(n => n.id === idToMark);
+                    if (index !== -1) {
+                        simulatedNotifications[index].leida = true;
+                    }
+                });
+                
+                // --- OPCIÓN 2: Descomentar para enviar al backend real ---
+                // const response = await fetch('/api/notificaciones/marcar_leidas', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ ids: ids })
+                // });
+                // if (!response.ok) {
+                //     throw new Error(`HTTP error! status: ${response.status}`);
+                // }
+                // const result = await response.json();
+                // console.log(result.message);
+
+                // Después de marcar, actualiza la visualización y el conteo
+                await fetchAndDisplayNotificaciones(); 
+                await fetchUnreadNotificationCount(); // Actualiza el contador de la campana
+
+                // Si fue un clic individual, cierra el dropdown
+                if (isIndividualClick) {
+                    const bsDropdown = bootstrap.Dropdown.getInstance(notificationDropdownLink);
+                    if (bsDropdown) {
+                        bsDropdown.hide();
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error al marcar notificaciones como leídas:', error);
+                alert('Hubo un error al marcar las notificaciones como leídas.');
+            }
+        }
+
+        /**
+         * Obtiene solo el conteo de notificaciones no leídas para la campana.
+         * Cuando uses la DB real, descomenta la lógica de fetch y comenta la de simulado.
+         */
+        async function fetchUnreadNotificationCount() {
+            let count = 0;
+            try {
+                // --- OPCIÓN 1: Contar desde los datos simulados en el frontend ---
+                count = simulatedNotifications.filter(noti => !noti.leida).length;
+                
+                // --- OPCIÓN 2: Usar el fetch real a tu API de Flask ---
+                // const response = await fetch('/api/notificaciones/no_leidas_count');
+                // if (!response.ok) {
+                //     if (response.status === 401) throw new Error('No autorizado para obtener el conteo.');
+                //     throw new Error(`HTTP error! status: ${response.status}`);
+                // }
+                // const data = await response.json();
+                // count = data.count;
+
+            } catch (error) {
+                console.error('Error al obtener el conteo de notificaciones no leídas:', error);
+                count = 'X'; // Indicar error en el contador
+            } finally {
+                notificacionesCountSpan.textContent = count;
+            }
+        }
+
+
+        // --- Funciones de Tareas y Perfil (tus funciones existentes, sin cambios importantes) ---
+
+        /**
+         * Carga los cursos disponibles en el select de creación/edición de tareas.
+         * @param {string} [selectedCourseId] - Opcional. ID del curso a seleccionar por defecto.
+         */
+        async function cargarCursos(selectedCourseId = null) {
+            try {
+                const response = await fetch('/api/cursos');
+                const cursos = await response.json();
+                const cursoDestinoSelect = document.getElementById('curso_destino');
+                cursoDestinoSelect.innerHTML = ''; // Limpiar opciones existentes
+
+                if (cursos.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'No hay cursos disponibles';
+                    option.disabled = true;
+                    cursoDestinoSelect.appendChild(option);
+                } else {
+                    cursos.forEach(curso => {
+                        const option = document.createElement('option');
+                        option.value = curso.id;
+                        option.textContent = curso.nombre;
+                        if (selectedCourseId && curso.id === parseInt(selectedCourseId)) {
+                            option.selected = true;
+                        }
+                        cursoDestinoSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error al cargar cursos:', error);
+                const cursoDestinoSelect = document.getElementById('curso_destino');
+                cursoDestinoSelect.innerHTML = '<option value="">Error al cargar cursos</option>';
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Llamada inicial para obtener el conteo de notificaciones no leídas al cargar la página
+        fetchUnreadNotificationCount();
+
+        // Manejo del click en el botón "Marcar todas como leídas"
+        if (marcarTodasLeidasBtn) {
+            marcarTodasLeidasBtn.addEventListener('click', async function(event) {
+                event.preventDefault(); 
+                const unreadNotiElements = notificacionesLista.querySelectorAll('li.fw-bold[data-notification-id]');
+                const idsToMark = Array.from(unreadNotiElements).map(el => parseInt(el.dataset.notificationId));
+
+                if (idsToMark.length === 0) {
+                    alert('No hay notificaciones no leídas para marcar.');
+                    return;
+                }
+                await markNotificationsAsRead(idsToMark);
+            });
+        }
+
+        // Cargar notificaciones cuando el dropdown de notificaciones se abre
+        if (notificationDropdownLink) {
+            notificationDropdownLink.addEventListener('show.bs.dropdown', fetchAndDisplayNotificaciones);
+        }
+
+        // Los demás Event Listeners y funciones de Tareas/Perfil, etc.
+        // (No se modifican en esta revisión, simplemente se incluyen para completar el script)
+
+        dashboardLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            tasksContainer.style.display = 'block';
+            studentsContainer.style.display = 'none';
+            document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+            dashboardLink.classList.add('active');
+        });
+
+        btnCrearTarea.addEventListener('click', () => {
+            formEditarTarea.reset();
+            document.getElementById('tareaId').value = '';
+            document.getElementById('nombreArchivoActual').textContent = '';
+            formEditarTarea.action = '/crear_tarea';
+            cargarCursos();
+            modalTareaInstance.show();
+        });
+
+        // NOTA: Para los botones de editar tarea que se añaden dinámicamente,
+        // es mejor usar delegación de eventos si fetchTasks() los crea en cada carga.
+        // Por ahora, se mantiene el forEach para elementos ya existentes.
+        document.querySelectorAll('.btn-editar').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                try {
+                    const resp = await fetch(`/api/tarea/${id}`);
+                    const data = await resp.json();
+                    if (data.error) return alert(data.error);
+
+                    formEditarTarea.reset();
+                    document.getElementById('tareaId').value = data.id;
+                    formEditarTarea.action = `/editar_tarea/${data.id}`;
+                    document.getElementById('titulo').value = data.titulo;
+                    document.getElementById('descripcion').value = data.descripcion;
+                    document.getElementById('fecha_vencimiento').value = data.fecha_vencimiento || '';
+                    document.getElementById('prioridad').value = data.prioridad;
+                    document.getElementById('estado').value = data.estado;
+
+                    await cargarCursos(data.curso_destino);
+
+                    if (data.ruta_archivo) {
+                        const nombreArchivo = data.ruta_archivo.split('/').pop();
+                        document.getElementById('nombreArchivoActual').textContent = `Archivo actual: ${nombreArchivo}`;
+                    } else {
+                        document.getElementById('nombreArchivoActual').textContent = '';
+                    }
+                    modalTareaInstance.show();
+                } catch (error) {
+                    console.error('Error al obtener tarea:', error);
+                    alert('Hubo un error al cargar los datos de la tarea.');
+                }
+            });
+        });
+
+        btnEditarPerfil.addEventListener('click', async (e) => {
+            e.preventDefault(); // Previene la acción por defecto del enlace si lo tiene
+            try {
+                const resp = await fetch('/api/profesor/perfil');
+                const data = await resp.json();
+                if (data.error) return alert(data.error);
+
+                document.getElementById('profesorId').value = data.id;
+                document.getElementById('nombrePerfil').value = data.nombre;
+                document.getElementById('emailPerfil').value = data.email;
+
+                inputNuevaContrasena.value = '';
+                inputConfirmarContrasena.value = '';
+                passwordMismatch.style.display = 'none';
+
+                if (data.avatar_url) {
+                    avatarActualText.textContent = `Avatar actual: ${data.avatar_url.split('/').pop()}`;
+                    previewAvatar.src = data.avatar_url;
+                    previewAvatar.style.display = 'block';
+                } else {
+                    avatarActualText.textContent = 'No hay avatar actual.';
+                    previewAvatar.src = '';
+                    previewAvatar.style.display = 'none';
+                }
+                modalPerfilProfesorInstance.show();
+            } catch (error) {
+                console.error('Error al obtener perfil:', error);
+                alert('Hubo un error al cargar los datos de tu perfil.');
+            }
+        });
+
+        inputConfirmarContrasena.addEventListener('keyup', () => {
+            passwordMismatch.style.display = inputNuevaContrasena.value !== inputConfirmarContrasena.value ? 'block' : 'none';
+        });
+        inputNuevaContrasena.addEventListener('keyup', () => {
+            passwordMismatch.style.display = (inputConfirmarContrasena.value && inputNuevaContrasena.value !== inputConfirmarContrasena.value) ? 'block' : 'none';
+        });
+
+        inputAvatarPerfil.addEventListener('change', function () {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    previewAvatar.src = e.target.result;
+                    previewAvatar.style.display = 'block';
+                };
+                reader.readAsDataURL(this.files[0]);
+                avatarActualText.textContent = `Nuevo archivo: ${this.files[0].name}`;
+            } else {
+                previewAvatar.src = '';
+                previewAvatar.style.display = 'none';
+                avatarActualText.textContent = 'No hay avatar actual.';
+            }
+        });
+
+        sidebar.classList.add('sidebar-collapsed');
+
+        sidebar.addEventListener('mouseenter', () => {
+            sidebar.classList.remove('sidebar-collapsed');
+        });
+        sidebar.addEventListener('mouseleave', () => {
+            sidebar.classList.add('sidebar-collapsed');
+            document.querySelectorAll('.list-unstyled.collapse.show').forEach(submenu => {
+                new bootstrap.Collapse(submenu, { toggle: false }).hide();
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 's' || e.key === 'S') {
+                sidebar.classList.toggle('sidebar-collapsed');
+            }
+        });
+        document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+            link.addEventListener('click', function () {
+                document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        if (!window.location.search) {
+            dashboardLink.classList.add('active');
+        } else {
+            dashboardLink.classList.remove('active');
+        }
+
+        document.querySelectorAll('.curso-link').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const curso = this.dataset.curso;
+                const urlParams = new URLSearchParams(window.location.search);
+                urlParams.set('curso', curso);
+                window.location.href = `?${urlParams.toString()}`;
+            });
+        });
+
+        document.querySelectorAll('.curso-link-sidebar').forEach(link => {
+            link.addEventListener('click', async function (e) {
+                e.preventDefault();
+                const courseName = this.dataset.courseName;
+                tasksContainer.style.display = 'none';
+                studentsContainer.style.display = 'block';
+                studentsCourseTitle.querySelector('span').textContent = courseName;
+                studentsTableBody.innerHTML = '';
+                noStudentsMessage.classList.add('d-none');
+
+                try {
+                    const response = await fetch(`/api/estudiantes_por_curso/${encodeURIComponent(courseName)}`);
+                    const students = await response.json();
+                    if (!response.ok) throw new Error(students.error || 'Error al cargar los estudiantes.');
+
+                    if (students.length > 0) {
+                        let tableHtml = '';
+                        students.forEach(student => {
+                            tableHtml += `
+                                <tr>
+                                    <td>${student.nombre}</td>
+                                    <td>${student.nombre_usuario}</td>
+                                    <td>${student.correo}</td>
+                                </tr>`;
+                        });
+                        studentsTableBody.innerHTML = tableHtml;
+                    } else {
+                        noStudentsMessage.classList.remove('d-none');
+                        noStudentsMessage.textContent = 'No hay estudiantes asignados a este curso.';
+                    }
+                } catch (error) {
+                    console.error("Error al obtener estudiantes:", error);
+                    noStudentsMessage.classList.remove('d-none');
+                    noStudentsMessage.textContent = `Error al cargar los estudiantes: ${error.message}`;
+                }
+            });
+        });
+
+        btnBackToTasks.addEventListener('click', () => {
+            studentsContainer.style.display = 'none';
+            tasksContainer.style.display = 'block';
+            document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+            dashboardLink.classList.add('active');
+        });
+        
+        cargarCursos(); 
+    });
+</script>
+</body>
+</html>
